@@ -10,13 +10,37 @@ struct FileInfo {
 }
 
 #[tauri::command]
-async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: f64) {
+async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: f64,
+    quality_option: String, framerate_option: String) {
     // println!("Backend received path: {}", file_path);
 
     let file_data: FileInfo = split_filepath(&file_path);
     let video_length_seconds: f64 = call_ffprobe_get_video_length(&file_path);
     let bitrate_in_kbps = calculate_bitrate(max_file_size, video_length_seconds);
-    call_ffmpeg_for_conversion(app, file_data, bitrate_in_kbps, max_file_size).await;
+    let selected_resolution = extract_resolution_number(quality_option);
+    let selected_framerate = extract_framerate_number(framerate_option);
+    call_ffmpeg_for_conversion(app, file_data, bitrate_in_kbps, max_file_size, selected_resolution, selected_framerate).await;
+}
+
+fn extract_resolution_number(quality_option: String) -> i32 {
+    if quality_option == "Source" {
+        0
+    } else {
+        quality_option
+            .trim_end_matches('p')
+            .parse::<i32>()
+            .unwrap_or(0) //TODO: throw an error here instead of defaulting to source
+    }
+}
+
+fn extract_framerate_number(framerate_option: String) -> i32 {
+    if framerate_option == "Source" {
+        0
+    } else {
+        framerate_option
+            .parse::<i32>()
+            .unwrap_or(0) //TODO: throw an error here instead of defaulting to source
+    }
 }
 
 fn call_ffprobe_get_video_length(file_path_string: &String) -> f64 {
@@ -25,13 +49,13 @@ fn call_ffprobe_get_video_length(file_path_string: &String) -> f64 {
     if let Some(duration_str) = result.format.duration {
         duration_str.parse().unwrap_or(0.0)
     } else {
-        0.0
+        0.0 //TODO: throw an error here instead of defaulting to 0
     }
 }
 
 fn calculate_bitrate(max_file_size_mb: f64, video_length_seconds: f64) -> f64 {
     if video_length_seconds <= 0.0 {
-        return 0.0;
+        return 0.0; //TODO: throw an error here instead of defaulting to 0
     }
 
     // Apply a 5% margin to account for container overhead
@@ -65,7 +89,9 @@ fn split_filepath(file_path_string: &String) -> FileInfo {
     }
 }
 
-async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: FileInfo, bitrate_in_kbps: f64, max_file_size: f64) {
+async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: FileInfo,
+    bitrate_in_kbps: f64, max_file_size: f64, selected_resolution: i32, selected_framerate: i32) {
+
     let output_path = format!("{}\\{}-{}M.{}", video_file_info.parent_path, video_file_info.file_name, max_file_size, video_file_info.extension);
     let audio_bitrate_kbps: f64 = 128.0;
     let audio_adjusted_bitrate: f64 = bitrate_in_kbps - audio_bitrate_kbps;
@@ -73,25 +99,41 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
     let bitrate_str = format!("{}k", audio_adjusted_bitrate);
     let bufsize_str = format!("{}k", audio_adjusted_bitrate * 2.0);
     let audio_bitrate_str = format!("{}k", audio_bitrate_kbps);
-    // println!("Bitrate: {}, Bufsize: {}", bitrate_str, bufsize_str);
+
+    let mut ffmpeg_args = vec![
+        "-y".to_string(), 
+        "-i".to_string(), video_file_info.path, 
+        "-c:v".to_string(), "libx264".to_string(),
+        "-preset".to_string(), "slow".to_string(),
+        "-b:v".to_string(), bitrate_str.clone(),
+        "-maxrate".to_string(), bitrate_str,
+        "-bufsize".to_string(), bufsize_str,
+    ];
+
+    if selected_resolution > 0 {
+        ffmpeg_args.push("-vf".to_string());
+        ffmpeg_args.push(format!("scale=-2:{}", selected_resolution));
+    }
+
+    if selected_framerate > 0 {
+        ffmpeg_args.push("-r".to_string());
+        ffmpeg_args.push(selected_framerate.to_string());
+    }
+
+    ffmpeg_args.extend([
+        "-c:a".to_string(), "aac".to_string(),
+        "-b:a".to_string(), audio_bitrate_str, 
+        output_path
+    ]);
+
+    // println!("{:#?}", ffmpeg_args);
 
     let sidecar_command = app.shell()
-        .sidecar("ffmpeg") // Note: use the base name only
+        .sidecar("ffmpeg") 
         .unwrap()
-        .args([
-            "-y", 
-            "-i", &video_file_info.path, 
-            "-c:v", "libx264",
-            "-preset", "slow",
-            "-b:v", &bitrate_str,
-            "-maxrate", &bitrate_str,
-            "-bufsize", &bufsize_str,
-            "-c:a", "aac",
-            "-b:a", &audio_bitrate_str, 
-            &output_path
-        ]);
+        .args(ffmpeg_args);
 
-    let output = sidecar_command.output().await.unwrap();
+    let output = sidecar_command.output().await.expect("failed to execute ffmpeg");
     if output.status.success() {
         // println!("Success: {}", output_path);
     }

@@ -3,15 +3,20 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 
-let unlistenDrop: any; //TODO: change all : any file actual datatypes
-const maxFileSize = ref<number | null>(10);
+let unlistenDrop: any; //Drag N Drop
+
 let draggedFilePath: string;
 let conversionStatus  = ref<string>("Drag a video in to convert it!");
+const maxFileSize = ref<number | null>(10);
+const selectedQualityOption = ref<string>('Source');
+const qualityOptions = ['Source', '1440p', '1080p', '720p', '480p', '360p'];
+const selectedFramerateOption = ref<string>('Source');
+const framerateOptions = ['Source', '60', '30'];
 
 onMounted(async () => {
   unlistenDrop = await listen('tauri://drag-drop', (event: any) => {
     draggedFilePath = event.payload.paths[0];
-    conversionStatus.value = draggedFilePath;
+    conversionStatus.value = draggedFilePath.split(/[\\/]/).pop() ?? "";
   });
 });
 
@@ -25,21 +30,24 @@ async function transcodeVideo() {
   try {
     await invoke('convert_video', { 
       filePath: draggedFilePath,
-      maxFileSize: maxFileSize.value
+      maxFileSize: maxFileSize.value,
+      qualityOption: selectedQualityOption.value,
+      framerateOption: selectedFramerateOption.value
     });
+
     conversionStatus.value = "Done! You can drag in another video to convert it.";
     draggedFilePath = "";
   } catch (error) {
-    conversionStatus.value = "conversion failed: " + error;
+    conversionStatus.value = "Conversion failed: " + error;
   }
-  // const command = Command.sidecar('bin/ffmpeg', ['-i', 'input.mp4', 'output.avi']);
-  // const output = await command.execute();
 }
 </script>
 
 <template>
   <main class="container">
+
     <p>{{conversionStatus}}</p>
+
     <div>Size limit in MB:<input 
       id="numeric-input"
       v-model.number="maxFileSize" 
@@ -48,20 +56,28 @@ async function transcodeVideo() {
       step="1"
       placeholder="10"
     />
+
+    Quality:
+    <select v-model="selectedQualityOption">
+      <option v-for="item in qualityOptions" :key="item" :value="item">
+        {{ item }}
+      </option>
+    </select>
+
+    Framerate:
+    <select v-model="selectedFramerateOption">
+      <option v-for="item in framerateOptions" :key="item" :value="item">
+        {{ item }}
+      </option>
+    </select>
+
     <button :disabled="!draggedFilePath" @click="transcodeVideo">Convert</button>
   </div>
+
   </main>
 </template>
 
 <style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
-}
-
 </style>
 <style>
 :root {
@@ -89,17 +105,6 @@ async function transcodeVideo() {
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
 .row {
   display: flex;
   justify-content: center;
@@ -120,6 +125,7 @@ h1 {
 }
 
 input,
+select,
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -131,7 +137,7 @@ button {
   background-color: #ffffff;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-  margin-left: 0.3vw;
+  margin-left: 0.5em;
 }
 
 button:not(:disabled) {
@@ -147,7 +153,12 @@ button:not(:disabled):active {
   background-color: #e8e8e8;
 }
 
+input[type="number"] {
+  width: 6ch; 
+}
+
 input,
+select,
 button {
   outline: none;
 }

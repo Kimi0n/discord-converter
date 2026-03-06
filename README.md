@@ -6,12 +6,12 @@ Only tested with Windows 11.
 
 # Todos
 
-- Remember the settings that were set last time by saving them in a config file
-- Progressbar while ffmpeg is encoding
-
 - Create a settings tab with an encoder selector and hardware accelerator setting (h264, h265, av1, cpu or gpu)
-- Create a framerate selector (keep, 30, 60)
-- Create a resolution selector (360p - 1440p)
+- hdr to sdr tonemapping
+
+- Config file that gets created when it doesnt exist yet
+    - Configure defaults in settings
+- Progressbar while ffmpeg is encoding
 
 - Write tests and proper logging
 
