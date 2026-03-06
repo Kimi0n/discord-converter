@@ -19,7 +19,7 @@ Only tested with Windows 11.
 
 # Things for me to remember
 
-- Add the ffmpeg and ffprobe exes to ```src-tauri/bin``` or install ffmpeg so it can be called by commandline
+- Add the ffmpeg and ffprobe exes to ```src-tauri/bin```
 
 ## Start dev server
 
