@@ -12,6 +12,8 @@ const selectedQualityOption = ref<string>('Source');
 const qualityOptions = ['Source', '1440p', '1080p', '720p', '480p', '360p'];
 const selectedFramerateOption = ref<string>('Source');
 const framerateOptions = ['Source', '60', '30'];
+const isHardwareAccelerated = ref(false);
+const isModernCodec = ref(true);
 
 onMounted(async () => {
   unlistenDrop = await listen('tauri://drag-drop', (event: any) => {
@@ -32,7 +34,9 @@ async function transcodeVideo() {
       filePath: draggedFilePath,
       maxFileSize: maxFileSize.value,
       qualityOption: selectedQualityOption.value,
-      framerateOption: selectedFramerateOption.value
+      framerateOption: selectedFramerateOption.value,
+      isHardwareAccelerated: isHardwareAccelerated.value,
+      isModernCodec: isModernCodec.value
     });
 
     conversionStatus.value = "Done! You can drag in another video to convert it.";
@@ -70,6 +74,12 @@ async function transcodeVideo() {
         {{ item }}
       </option>
     </select>
+
+    Use NVENC (Nvidia):
+    <input type="checkbox" v-model="isHardwareAccelerated">
+
+    Modern codec (h265):
+    <input type="checkbox" v-model="isModernCodec">
 
     <button :disabled="!draggedFilePath" @click="transcodeVideo">Convert</button>
   </div>
@@ -126,6 +136,7 @@ h1 {
 
 input,
 select,
+checkbox,
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -137,7 +148,7 @@ button {
   background-color: #ffffff;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-  margin-left: 0.5em;
+  margin: 0.5em 0.5em 0 0;
 }
 
 button:not(:disabled) {
@@ -159,6 +170,7 @@ input[type="number"] {
 
 input,
 select,
+checkbox,
 button {
   outline: none;
 }
