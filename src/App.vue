@@ -52,6 +52,8 @@ async function transcodeVideo() {
 
     <p>{{conversionStatus}}</p>
 
+    <span v-if="conversionStatus == `Converting...`" class="spinner"></span>
+
     <div>Size limit in MB:<input 
       id="numeric-input"
       v-model.number="maxFileSize" 
@@ -113,11 +115,27 @@ async function transcodeVideo() {
   flex-direction: column;
   justify-content: center;
   text-align: center;
+  align-items: center;
 }
 
 .row {
   display: flex;
   justify-content: center;
+}
+
+.spinner {
+  border: 0.5em solid rgba(0, 0, 0, 0.1);
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  border-left-color: #09d;
+  animation: spin 1s ease infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 a {
