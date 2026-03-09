@@ -12,7 +12,7 @@ struct FileInfo {
 #[tauri::command]
 async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: f64,
     quality_option: String, framerate_option: String, is_hardware_accelerated: bool,
-    is_modern_codec: bool) {
+    is_modern_codec: bool) -> Result<String, String> {
     // println!("Backend received path: {}", file_path);
 
     let file_data: FileInfo = split_filepath(&file_path);
@@ -20,8 +20,9 @@ async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: 
     let bitrate_in_kbps = calculate_bitrate(max_file_size, video_length_seconds);
     let selected_resolution = extract_resolution_number(quality_option);
     let selected_framerate = extract_framerate_number(framerate_option);
+    
     call_ffmpeg_for_conversion(app, file_data, bitrate_in_kbps, max_file_size,
-        selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec).await;
+        selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec).await
 }
 
 fn extract_resolution_number(quality_option: String) -> i32 {
@@ -93,7 +94,7 @@ fn split_filepath(file_path_string: &String) -> FileInfo {
 
 async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: FileInfo,
     bitrate_in_kbps: f64, max_file_size: f64, selected_resolution: i32, selected_framerate: i32, 
-    is_hardware_accelerated: bool, is_modern_codec: bool) {
+    is_hardware_accelerated: bool, is_modern_codec: bool) -> Result<String, String> {
 
     let output_path = format!("{}\\{}-{}M.{}", video_file_info.parent_path, video_file_info.file_name, max_file_size, video_file_info.extension);
     let audio_bitrate_kbps: f64 = 128.0;
@@ -156,8 +157,16 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
     let output = sidecar_command.output().await.expect("failed to execute ffmpeg");
     if !output.status.success() {
         let error_message = String::from_utf8_lossy(&output.stderr);
-        println!("FFmpeg Error: {}", error_message); //TODO: Pass error back to UI
+        let possible_errors = ["required", "Error", "Failed"];
+        let specific_error = error_message
+            .lines()
+            .find(|line| possible_errors.iter().any(|&word| line.contains(word)))
+            .unwrap_or("Unknown FFmpeg error");
+
+        return Err(specific_error.to_string());
     }
+
+    Ok("Success!".into())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
