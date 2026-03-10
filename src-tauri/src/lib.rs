@@ -1,3 +1,5 @@
+mod video_helper_functions;
+
 use std::path::Path;
 use tauri_plugin_shell::ShellExt;
 use ffprobe::ffprobe;
@@ -17,33 +19,12 @@ async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: 
 
     let file_data: FileInfo = split_filepath(&file_path);
     let video_length_seconds: f64 = call_ffprobe_get_video_length(&file_path);
-    let bitrate_in_kbps = calculate_bitrate(max_file_size, video_length_seconds);
-    let selected_resolution = extract_resolution_number(quality_option);
-    let selected_framerate = extract_framerate_number(framerate_option);
-    
+    let bitrate_in_kbps = video_helper_functions::calculate_bitrate(max_file_size, video_length_seconds);
+    let selected_resolution = video_helper_functions::extract_resolution_number(quality_option);
+    let selected_framerate = video_helper_functions::extract_framerate_number(framerate_option);
+
     call_ffmpeg_for_conversion(app, file_data, bitrate_in_kbps, max_file_size,
         selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec).await
-}
-
-fn extract_resolution_number(quality_option: String) -> i32 {
-    if quality_option == "Source" {
-        0
-    } else {
-        quality_option
-            .trim_end_matches('p')
-            .parse::<i32>()
-            .unwrap_or(0) //TODO: throw an error here instead of defaulting to source
-    }
-}
-
-fn extract_framerate_number(framerate_option: String) -> i32 {
-    if framerate_option == "Source" {
-        0
-    } else {
-        framerate_option
-            .parse::<i32>()
-            .unwrap_or(0) //TODO: throw an error here instead of defaulting to source
-    }
 }
 
 fn call_ffprobe_get_video_length(file_path_string: &String) -> f64 {
@@ -54,19 +35,6 @@ fn call_ffprobe_get_video_length(file_path_string: &String) -> f64 {
     } else {
         0.0 //TODO: throw an error here instead of defaulting to 0
     }
-}
-
-fn calculate_bitrate(max_file_size_mb: f64, video_length_seconds: f64) -> f64 {
-    if video_length_seconds <= 0.0 {
-        return 0.0; //TODO: throw an error here instead of defaulting to 0
-    }
-
-    // Apply a 5% margin to account for container overhead
-    let safe_file_size_mb = max_file_size_mb * 0.95;
-    let total_kilobits = safe_file_size_mb * 8192.0;
-    let bitrate_kbps = total_kilobits / video_length_seconds;
-
-    bitrate_kbps
 }
 
 fn split_filepath(file_path_string: &String) -> FileInfo {
@@ -149,12 +117,12 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
 
     // println!("{:#?}", ffmpeg_args);
 
-    let sidecar_command = app.shell()
+    let ffmpeg_command = app.shell()
         .sidecar("ffmpeg") 
         .unwrap()
         .args(ffmpeg_args);
 
-    let output = sidecar_command.output().await.expect("failed to execute ffmpeg");
+    let output = ffmpeg_command.output().await.expect("failed to execute ffmpeg");
     if !output.status.success() {
         let error_message = String::from_utf8_lossy(&output.stderr);
         let possible_errors = ["required", "Error", "Failed"];

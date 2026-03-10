@@ -29,6 +29,12 @@ Add the ffmpeg and ffprobe exes to `src-tauri/bin` and rename them to:
 npm run tauri dev
 ```
 
+## Test the thing (backend only for now)
+
+```sh
+npm test
+```
+
 ## Build the thing
 
 ```sh
