@@ -1,5 +1,7 @@
 # Discord Converter
 
+![Preview image of the app](src/assets/app_preview.png "Preview Image")
+
 Basically a ffmpeg GUI that lets you set a maximum filesize and converts a video with that in mind. Great for Discord's very generous filesize limits.
 
 Only tested with Windows 11.
