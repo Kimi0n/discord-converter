@@ -2,6 +2,8 @@ mod video_helper_functions;
 
 use std::path::Path;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
+use tauri::Emitter;
 use ffprobe::ffprobe;
 
 struct FileInfo {
@@ -24,7 +26,7 @@ async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: 
     let selected_framerate = video_helper_functions::extract_framerate_number(framerate_option);
 
     call_ffmpeg_for_conversion(app, file_data, bitrate_in_kbps, max_file_size,
-        selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec).await
+        selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec, video_length_seconds).await
 }
 
 fn call_ffprobe_get_video_length(file_path_string: &String) -> f64 {
@@ -62,7 +64,7 @@ fn split_filepath(file_path_string: &String) -> FileInfo {
 
 async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: FileInfo,
     bitrate_in_kbps: f64, max_file_size: f64, selected_resolution: i32, selected_framerate: i32, 
-    is_hardware_accelerated: bool, is_modern_codec: bool) -> Result<String, String> {
+    is_hardware_accelerated: bool, is_modern_codec: bool, video_length_seconds: f64) -> Result<String, String> {
 
     let output_path = format!("{}\\{}-{}M.{}", video_file_info.parent_path, video_file_info.file_name, max_file_size, video_file_info.extension);
     let audio_bitrate_kbps: f64 = 128.0;
@@ -122,19 +124,42 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
         .unwrap()
         .args(ffmpeg_args);
 
-    let output = ffmpeg_command.output().await.expect("failed to execute ffmpeg");
-    if !output.status.success() {
-        let error_message = String::from_utf8_lossy(&output.stderr);
-        let possible_errors = ["required", "Error", "Failed"];
-        let specific_error = error_message
-            .lines()
-            .find(|line| possible_errors.iter().any(|&word| line.contains(word)))
-            .unwrap_or("Unknown FFmpeg error");
+    let (mut rx, _child) = ffmpeg_command
+        .spawn()
+        .expect("failed to spawn ffmpeg");
 
-        return Err(specific_error.to_string());
-    }
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line_bytes) => { // Not used
+                    let line = String::from_utf8_lossy(&line_bytes);
+                    println!("STDOUT:: {}", line);
+                },
+                CommandEvent::Stderr(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes);
+                    if line.contains("time=") {
+                        let framecount = line.split('=').nth(5).unwrap_or("0").trim_end_matches(" bitrate").trim();
+                        let completed_time_in_seconds = video_helper_functions::ffmpeg_time_to_seconds(framecount);
+                        let completed_percentage = if video_length_seconds > 0.0 {
+                            (completed_time_in_seconds / video_length_seconds) * 100.0
+                        } else {
+                            0.0
+                        };
 
-    Ok("Success!".into())
+                        let percentage_string = format!("{:.0}%", completed_percentage);
+                        app.emit("ffmpeg-progress", percentage_string).unwrap();
+                    }
+                },
+                CommandEvent::Terminated(payload) => {
+                    app.emit("ffmpeg-finished", payload.code).unwrap();
+                    break;
+                },
+                _ => {}
+            }
+        }
+    });
+
+    Ok("Started!".into())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

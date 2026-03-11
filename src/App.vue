@@ -8,6 +8,7 @@ let unlistenDrop: any; //Drag N Drop
 
 let draggedFilePath: string;
 let conversionStatus  = ref<string>("Drag a video in to convert it!");
+let isConverting = false;
 const maxFileSize = ref<number | null>(10);
 const selectedQualityOption = ref<string>('Source');
 const qualityOptions = ['Source', '1440p', '1080p', '720p', '480p', '360p'];
@@ -27,10 +28,27 @@ onUnmounted(() => {
   if (unlistenDrop) unlistenDrop();
 });
 
-async function transcodeVideo() {
-  conversionStatus.value = "Converting...";
+listen('ffmpeg-progress', (event) => {
+  const currentPercentString = event.payload; 
+  conversionStatus.value = `Converting: ${currentPercentString}`;
+  draggedFilePath = "";
+});
 
+listen('ffmpeg-finished', (event) => {
+  isConverting = false;
+  const conversionEndCode = event.payload; 
+
+  if(conversionEndCode == 0) {
+    conversionStatus.value = `Done! Drag another video in to convert another one.`;
+  } else {
+    conversionStatus.value = `Something went wrong. Please try again!`;
+  }
+});
+
+async function transcodeVideo() {
   try {
+    isConverting = true;
+
     await invoke('convert_video', { 
       filePath: draggedFilePath,
       maxFileSize: maxFileSize.value,
@@ -40,9 +58,8 @@ async function transcodeVideo() {
       isModernCodec: isModernCodec.value
     });
 
-    conversionStatus.value = "Done! You can drag in another video to convert it.";
-    draggedFilePath = "";
   } catch (error) {
+    isConverting = false;
     conversionStatus.value = "Conversion failed: " + error;
   }
 }
@@ -53,7 +70,7 @@ async function transcodeVideo() {
 
     <p>{{conversionStatus}}</p>
 
-    <span v-if="conversionStatus == `Converting...`" class="spinner"></span>
+    <span v-if="isConverting" class="spinner"></span>
 
     <div>Size limit in MB:<input 
       id="numeric-input"

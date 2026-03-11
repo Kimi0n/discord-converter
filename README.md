@@ -8,15 +8,15 @@ Only tested with Windows 11.
 
 # Todos
 
-- Progressbar while ffmpeg is encoding
+- ffmpeg error logging
 - HDR to SDR tonemapping
 - Figure out why commandline flashes for a split second
 - Config file that gets created when it doesnt exist yet
     - Configure defaults in settings
-- pass ffmpeg errors to the UI (like not found)
 - Write tests and proper logging
 - Create a custom icon for the program
 - Design a proper UI
+- Abort button
 
 # How to build
 
