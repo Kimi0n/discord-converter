@@ -4,11 +4,13 @@ use std::path::Path;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri::Emitter;
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 
 struct FileInfo {
     path: String,
     file_name: String,
-    extension: String,
     parent_path: String
 }
 
@@ -57,10 +59,6 @@ async fn call_ffmpeg_get_video_length(app: tauri::AppHandle, file_path_string: &
 fn split_filepath(file_path_string: &String) -> FileInfo {
     let path = Path::new(&file_path_string);
 
-    // Get the extension (e.g., "pdf")
-    let file_extension = path.extension()
-        .and_then(|os_str| os_str.to_str());
-
     // Get the filename without the extension (e.g., "my_document")
     let file_stem = path.file_stem()
         .and_then(|os_str| os_str.to_str());
@@ -71,22 +69,34 @@ fn split_filepath(file_path_string: &String) -> FileInfo {
 
     FileInfo {
         file_name: file_stem.unwrap_or("N/A").to_string(),
-        extension: file_extension.unwrap_or("N/A").to_string(),
         parent_path: parent_path.unwrap_or("N/A").to_string(),
         path: file_path_string.clone()
     }
+}
+
+fn write_to_file(path: &str, content: &str) -> std::io::Result<()> {
+    let mut file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)?;
+
+    file.write_all(content.as_bytes())?;
+    Ok(())
 }
 
 async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: FileInfo,
     bitrate_in_kbps: f64, max_file_size: f64, selected_resolution: i32, selected_framerate: i32, 
     is_hardware_accelerated: bool, is_modern_codec: bool, video_length_seconds: f64) {
 
-    let output_path = format!("{}\\{}-{}M.{}", video_file_info.parent_path, video_file_info.file_name, max_file_size, video_file_info.extension);
+    let log_file_path = "output.log";
+    let _write_result = fs::write(log_file_path, "Logs from: call_ffmpeg_for_conversion\r\n");
+
+    let output_path = format!("{}\\{}-{}M.{}", video_file_info.parent_path, video_file_info.file_name, max_file_size, "mp4");
     let audio_bitrate_kbps: f64 = 128.0;
     let audio_adjusted_bitrate: f64 = bitrate_in_kbps - audio_bitrate_kbps;
 
     if audio_adjusted_bitrate <= 0.0 {
-        app.emit("ffmpeg-error", "Error: Expected quality too low! Reduce the resolution or framerate or increase the max size.").unwrap();
+        app.emit("ffmpeg-error", "Error: Expected quality too low! Increase the max size or try a shorter video.").unwrap();
         return;
     }
 
@@ -138,6 +148,7 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
     ]);
 
     // println!("{:#?}", ffmpeg_args);
+    let _ = write_to_file(log_file_path, format!("FFmpeg args: {:?}\r\n", ffmpeg_args).as_str());
 
     let ffmpeg_command = app.shell()
         .sidecar("ffmpeg") 
@@ -164,6 +175,8 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
                     }
 
                     // println!("{}", line);
+                    let _ = write_to_file(log_file_path, &line);
+
                     if line.contains("time=") {
                         let framecount = line.split('=').nth(5).unwrap_or("0").trim_end_matches(" bitrate").trim();
                         let completed_time_in_seconds = video_helper_functions::ffmpeg_time_to_seconds(framecount);

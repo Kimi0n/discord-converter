@@ -20,10 +20,9 @@ Only tested with Windows 11.
 
 # How to build
 
-Add the ffmpeg and ffprobe exes to `src-tauri/bin` and rename them to:
+Add the ffmpeg exe to `src-tauri/bin` and rename it to:
 
 `ffmpeg-x86_64-pc-windows-msvc.exe`
-`ffprobe-x86_64-pc-windows-msvc.exe`
 
 ## Start dev server
 
