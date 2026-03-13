@@ -4,7 +4,6 @@ use std::path::Path;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri::Emitter;
-use ffprobe::ffprobe;
 
 struct FileInfo {
     path: String,
@@ -20,7 +19,7 @@ async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: 
     // println!("Backend received path: {}", file_path);
 
     let file_data: FileInfo = split_filepath(&file_path);
-    let video_length_seconds: f64 = call_ffprobe_get_video_length(&file_path);
+    let video_length_seconds: f64 = call_ffprobe_get_video_length(app.clone(), &file_path).await;
     let bitrate_in_kbps = video_helper_functions::calculate_bitrate(max_file_size, video_length_seconds);
     let selected_resolution = video_helper_functions::extract_resolution_number(quality_option);
     let selected_framerate = video_helper_functions::extract_framerate_number(framerate_option);
@@ -29,14 +28,27 @@ async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: 
         selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec, video_length_seconds).await
 }
 
-fn call_ffprobe_get_video_length(file_path_string: &String) -> f64 {
-    let result = ffprobe(file_path_string).expect("Failed to probe file");
+async fn call_ffprobe_get_video_length(app: tauri::AppHandle, file_path_string: &String) -> f64 {
+    let mut time_in_seconds: f64 = 0.0;
+    let ffmpeg_command = app.shell()
+        .sidecar("ffmpeg") 
+        .unwrap()
+        .args(["-i", file_path_string]);
 
-    if let Some(duration_str) = result.format.duration {
-        duration_str.parse().unwrap_or(0.0)
-    } else {
-        0.0 //TODO: throw an error here instead of defaulting to 0
+    let output = ffmpeg_command.output().await.expect("failed to execute ffmpeg");
+
+    if !output.status.success() { 
+        let error_output = String::from_utf8_lossy(&output.stderr);
+        let specific_error = error_output
+            .lines()
+            .find(|line| line.contains("Duration: "))
+            .unwrap_or("Unknown FFmpeg error");
+        
+        let duration_str = specific_error.split(": ").nth(1).unwrap_or("0").trim_end_matches(", start").trim();
+        time_in_seconds = duration_str.split(":").last().unwrap_or("0").parse::<f64>().unwrap_or(0.0);
     }
+
+    time_in_seconds
 }
 
 fn split_filepath(file_path_string: &String) -> FileInfo {

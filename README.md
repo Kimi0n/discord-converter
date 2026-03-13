@@ -8,9 +8,10 @@ Only tested with Windows 11.
 
 # Todos
 
+- handle multiple audio/subtitle streams
+  - throw subtitles and extra streams away initially, then implement subtitle hardsubbing with the subtitles video filter
 - ffmpeg error logging
 - HDR to SDR tonemapping
-- Figure out why commandline flashes for a split second
 - Config file that gets created when it doesnt exist yet
     - Configure defaults in settings
 - Write tests and proper logging
