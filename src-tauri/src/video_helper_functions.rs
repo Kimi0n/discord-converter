@@ -1,6 +1,6 @@
 pub fn calculate_bitrate(max_file_size_mb: f64, video_length_seconds: f64) -> f64 {
     if video_length_seconds <= 0.0 {
-        return 0.0; //TODO: throw an error here instead of defaulting to 0
+        return 0.0;
     }
 
     let safe_file_size_mb = max_file_size_mb * 0.95; // 5% margin for container overhead
@@ -17,7 +17,7 @@ pub fn extract_resolution_number(quality_option: String) -> i32 {
         quality_option
             .trim_end_matches('p')
             .parse::<i32>()
-            .unwrap_or(0) //TODO: throw an error here instead of defaulting to source
+            .unwrap_or(0)
     }
 }
 
@@ -27,7 +27,7 @@ pub fn extract_framerate_number(framerate_option: String) -> i32 {
     } else {
         framerate_option
             .parse::<i32>()
-            .unwrap_or(0) //TODO: throw an error here instead of defaulting to source
+            .unwrap_or(0)
     }
 }
 
@@ -40,8 +40,6 @@ pub fn ffmpeg_time_to_seconds(time_in_ffmpeg_timestamp: &str) -> f64 {
     let seconds: f64 = parts[2].parse().unwrap_or(0.0);
     let millis: f64 = parts.get(3).map_or(0.0, |ms| ms.parse().unwrap_or(0.0));
 
-    // Calculation: (HH * 3600) + (MM * 60) + SS + (MS / 100)
-    // Note: Use 1000.0 if your input represents true milliseconds (3 digits)
     (hours * 3600.0) + (minutes * 60.0) + seconds + (millis / 100.0)
 }
 

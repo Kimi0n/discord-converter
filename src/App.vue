@@ -34,14 +34,19 @@ listen('ffmpeg-progress', (event) => {
   draggedFilePath = "";
 });
 
+listen('ffmpeg-error', (event) => {
+  isConverting = false;
+
+  const errorMessage = event.payload; 
+  conversionStatus.value = `${errorMessage}`;
+});
+
 listen('ffmpeg-finished', (event) => {
   isConverting = false;
   const conversionEndCode = event.payload; 
 
   if(conversionEndCode == 0) {
     conversionStatus.value = `Done! Drag another video in to convert another one.`;
-  } else {
-    conversionStatus.value = `Something went wrong. Please try again!`;
   }
 });
 

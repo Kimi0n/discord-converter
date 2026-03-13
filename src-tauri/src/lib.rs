@@ -15,20 +15,22 @@ struct FileInfo {
 #[tauri::command]
 async fn convert_video(app: tauri::AppHandle, file_path: String, max_file_size: f64,
     quality_option: String, framerate_option: String, is_hardware_accelerated: bool,
-    is_modern_codec: bool) -> Result<String, String> {
+    is_modern_codec: bool) {
     // println!("Backend received path: {}", file_path);
 
     let file_data: FileInfo = split_filepath(&file_path);
-    let video_length_seconds: f64 = call_ffprobe_get_video_length(app.clone(), &file_path).await;
+    let video_length_seconds: f64 = call_ffmpeg_get_video_length(app.clone(), &file_path).await;
     let bitrate_in_kbps = video_helper_functions::calculate_bitrate(max_file_size, video_length_seconds);
     let selected_resolution = video_helper_functions::extract_resolution_number(quality_option);
     let selected_framerate = video_helper_functions::extract_framerate_number(framerate_option);
 
+    // println!("{} {} {} {}", video_length_seconds, bitrate_in_kbps, selected_resolution, selected_framerate);
+
     call_ffmpeg_for_conversion(app, file_data, bitrate_in_kbps, max_file_size,
-        selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec, video_length_seconds).await
+        selected_resolution, selected_framerate, is_hardware_accelerated, is_modern_codec, video_length_seconds).await;
 }
 
-async fn call_ffprobe_get_video_length(app: tauri::AppHandle, file_path_string: &String) -> f64 {
+async fn call_ffmpeg_get_video_length(app: tauri::AppHandle, file_path_string: &String) -> f64 {
     let mut time_in_seconds: f64 = 0.0;
     let ffmpeg_command = app.shell()
         .sidecar("ffmpeg") 
@@ -45,7 +47,8 @@ async fn call_ffprobe_get_video_length(app: tauri::AppHandle, file_path_string: 
             .unwrap_or("Unknown FFmpeg error");
         
         let duration_str = specific_error.split(": ").nth(1).unwrap_or("0").trim_end_matches(", start").trim();
-        time_in_seconds = duration_str.split(":").last().unwrap_or("0").parse::<f64>().unwrap_or(0.0);
+        // println!("{}", duration_str);
+        time_in_seconds = video_helper_functions::ffmpeg_time_to_seconds(duration_str);
     }
 
     time_in_seconds
@@ -76,11 +79,16 @@ fn split_filepath(file_path_string: &String) -> FileInfo {
 
 async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: FileInfo,
     bitrate_in_kbps: f64, max_file_size: f64, selected_resolution: i32, selected_framerate: i32, 
-    is_hardware_accelerated: bool, is_modern_codec: bool, video_length_seconds: f64) -> Result<String, String> {
+    is_hardware_accelerated: bool, is_modern_codec: bool, video_length_seconds: f64) {
 
     let output_path = format!("{}\\{}-{}M.{}", video_file_info.parent_path, video_file_info.file_name, max_file_size, video_file_info.extension);
     let audio_bitrate_kbps: f64 = 128.0;
     let audio_adjusted_bitrate: f64 = bitrate_in_kbps - audio_bitrate_kbps;
+
+    if audio_adjusted_bitrate <= 0.0 {
+        app.emit("ffmpeg-error", "Error: Expected quality too low! Reduce the resolution or framerate or increase the max size.").unwrap();
+        return;
+    }
 
     let bitrate_str = format!("{}k", audio_adjusted_bitrate);
     let bufsize_str = format!("{}k", audio_adjusted_bitrate * 2.0);
@@ -149,6 +157,13 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
                 },
                 CommandEvent::Stderr(line_bytes) => {
                     let line = String::from_utf8_lossy(&line_bytes);
+
+                    if line.contains("10 bit encode not supported") {
+                        app.emit("ffmpeg-error", "Error: This video cannot be converted with the current settings. Please change modern codec or NVENC settings.").unwrap();
+                        return;
+                    }
+
+                    // println!("{}", line);
                     if line.contains("time=") {
                         let framecount = line.split('=').nth(5).unwrap_or("0").trim_end_matches(" bitrate").trim();
                         let completed_time_in_seconds = video_helper_functions::ffmpeg_time_to_seconds(framecount);
@@ -170,8 +185,6 @@ async fn call_ffmpeg_for_conversion(app: tauri::AppHandle, video_file_info: File
             }
         }
     });
-
-    Ok("Started!".into())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
