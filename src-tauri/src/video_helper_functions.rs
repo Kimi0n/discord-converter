@@ -32,6 +32,10 @@ pub fn extract_framerate_number(framerate_option: String) -> i32 {
 }
 
 pub fn ffmpeg_time_to_seconds(time_in_ffmpeg_timestamp: &str) -> f64 {
+    if time_in_ffmpeg_timestamp == "N/A" { //Some videos start with N/A
+        return 0.0
+    }
+
     // Split by ':' and '.' to get [hh, mm, ss, ms]
     let parts: Vec<&str> = time_in_ffmpeg_timestamp.split(&[':', '.'][..]).collect();
     

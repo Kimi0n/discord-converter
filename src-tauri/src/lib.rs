@@ -49,7 +49,7 @@ async fn call_ffmpeg_get_video_length(app: tauri::AppHandle, file_path_string: &
             .unwrap_or("Unknown FFmpeg error");
         
         let duration_str = specific_error.split(": ").nth(1).unwrap_or("0").trim_end_matches(", start").trim();
-        // println!("{}", duration_str);
+        // println!("Duration: {} - Line: {}", duration_str, specific_error);
         time_in_seconds = video_helper_functions::ffmpeg_time_to_seconds(duration_str);
     }
 
